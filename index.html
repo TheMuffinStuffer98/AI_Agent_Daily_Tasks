@@ -162,6 +162,7 @@ nav.tabs svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1
   </div>
   <div class="card" id="bookSummary"></div>
   <div class="card" id="potsCard"></div>
+  <div class="card" id="cardsCard"></div>
   <div class="grid2">
     <button class="btn primary" id="addManual">＋ Manuell</button>
     <button class="btn" id="addPhoto">📷 Kassenbon</button>
@@ -240,6 +241,16 @@ nav.tabs svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1
       <button class="btn" id="addContact">＋</button>
     </div>
   </div>
+  <div class="card">
+    <h3>Karten & Bargeld</h3>
+    <p class="muted small">Namen frei wählbar. Stichtag = erster Tag des neuen Abrechnungszeitraums; Abbuchung im Monat des Zeitraumendes oder im Folgemonat. „Karte 1" / „Karte 2" per Sprache funktioniert zusätzlich immer.</p>
+    <div id="cardSettings" class="stack" style="margin-top:8px"></div>
+    <div class="grid2" style="margin-top:10px">
+      <div class="field"><label class="f">Standard-Zahlungsart</label><select id="setDefaultPay"></select></div>
+      <div class="field"><label class="f">Abhebungen meist mit</label><select id="setWithdrawCard"></select></div>
+    </div>
+    <div class="field" style="margin-top:10px"><label class="f">Bargeld-Startbestand (€)</label><input type="number" id="setCashStart" inputmode="decimal" step="1"></div>
+  </div>
   <div class="card stack">
     <h3>Einstellungen</h3>
     <label class="row"><input type="checkbox" id="setSpeak"> Antworten vorlesen</label>
@@ -272,6 +283,10 @@ nav.tabs svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1
   <h2 id="mEntryTitle">Einkauf</h2>
   <img id="ePreview" class="preview" alt="" hidden>
   <p class="small muted" id="eAI" hidden></p>
+  <div class="grid2">
+    <div class="field"><label class="f">Art</label><select id="eKind"><option value="expense">Ausgabe</option><option value="withdraw">Bargeldabhebung</option></select></div>
+    <div class="field"><label class="f">Zahlungsart</label><select id="ePay"></select></div>
+  </div>
   <div class="field"><label class="f">Betrag (€)</label><input type="number" id="eAmount" inputmode="decimal" step="0.01" min="0"></div>
   <div class="field"><label class="f">Händler / Zweck</label><input type="text" id="eMerchant" placeholder="z. B. Rewe"></div>
   <div class="field"><label class="f">Kategorie</label><select id="eCat"></select></div>
@@ -326,7 +341,8 @@ function fill(s){
   s.plan=Object.assign({income:0,savings:0,reserve:0,fixed:[],start:null,savingsStart:0,reserveStart:0},s.plan||{});s.plan.fixed=s.plan.fixed||[];
   s.adjust=s.adjust||[];
   s.notes=s.notes||[];s.reminders=s.reminders||[];s.events=s.events||[];s.contacts=s.contacts||[];
-  s.settings=Object.assign({speak:true},s.settings||{});
+  s.settings=Object.assign({speak:true,defaultPay:'konto',withdrawCard:'k2',cashStart:0},s.settings||{});
+  s.cards=s.cards||[{id:'k1',name:'Karte 1',cut:22,offset:0},{id:'k2',name:'Karte 2',cut:8,offset:1}];
   s.chat=s.chat||[];return s;
 }
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){toast('Speichern fehlgeschlagen (Speicher voll?)');}}
@@ -469,6 +485,15 @@ function guessCat(t){
   for(const [c,words] of Object.entries(CAT_WORDS)){if(S.categories.includes(c)&&words.some(w=>l.includes(w)))return c;}
   return 'Sonstiges';
 }
+function detectPay(text){
+  const t=text.toLowerCase();let m;
+  if(/\b(in )?bar\b|\bbargeld\b|\bcash\b/.test(t)&&!/abgehoben|abheb|geholt|gezogen/.test(t))return 'bar';
+  if(/\b(mit|per|via|über|ueber)\s+(dem |der )?(konto|ec|girocard|ec[- ]karte)\b/.test(t))return 'konto';
+  const words={eins:1,zwei:2,drei:3,vier:4};
+  if((m=t.match(/\b(?:mit |per |via )?(?:der |dem )?(?:kredit)?karte\s*(\d|eins|zwei|drei|vier)\b/))){const n=/^\d$/.test(m[1])?+m[1]:words[m[1]];const c=S.cards[n-1];if(c)return c.id;}
+  for(const c of S.cards){if(t.includes(c.name.toLowerCase()))return c.id;}
+  return null;
+}
 function findContact(t){
   const l=t.toLowerCase();return S.contacts.find(c=>l.includes(c.name.toLowerCase()))||null;
 }
@@ -522,7 +547,10 @@ function parseCommand(raw){
     if(!merchant&&!purpose){purpose=stripWhen(text).replace(/\b\d+(?:[.,]\d{1,2})?\b/g,' ').replace(/\b(€|euro|eur|cent|ausgabe|ausgegeben|bezahlt|gezahlt|gekauft|einkauf|für|fuer|ich habe|habe|hab)\b/gi,' ').replace(/\b(ein|eins|eine|einen|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|[a-zäöü]*(zehn|zig|ßig|hundert)[a-zäöü]*)\b/gi,' ').replace(/\s+/g,' ').trim();}
     const note=purpose&&merchant&&purpose.toLowerCase()!==cat.toLowerCase()?purpose:'';
     const fromReserve=/aus (den |der )?rücklagen|aus (den |der )?ruecklagen|von den rücklagen/i.test(text);
-    return {intent:'expense',amount,merchant:(merchant||(purpose&&purpose.toLowerCase()!==cat.toLowerCase()?purpose:'')||cat).replace(/\s*aus (den |der )?r(ü|ue)cklagen.*$/i,'').trim()||cat,category:cat,note,date:isoDate(when),fromReserve};
+    const pay=detectPay(text);
+    if(/\babgehoben\b|\babheb(e|en)?\b|bargeld (geholt|gezogen)|\bgeldautomat\b|\bautomat\b/i.test(t)){return {intent:'withdraw',amount,pay:pay&&pay!=='bar'?pay:S.settings.withdrawCard,date:isoDate(parseWhen(text)||new Date())};}
+    const mer=(merchant||(purpose&&purpose.toLowerCase()!==cat.toLowerCase()?purpose:'')||cat).replace(/\s*aus (den |der )?r(ü|ue)cklagen.*$/i,'').replace(/\s*(mit|per|via)\s+(der |dem )?(karte|kreditkarte|ec|konto)\b.*$/i,'').replace(/\s*\b(in )?bar( bezahlt| gezahlt)?\b\s*$/i,'').replace(/\s+(mit|per|via|in|über|ueber)$/i,'').trim()||cat;
+    return {intent:'expense',amount,merchant:mer,category:cat,note,date:isoDate(when),fromReserve,pay:pay||S.settings.defaultPay};
   }
   return {intent:'unknown',text};
 }
@@ -547,11 +575,12 @@ async function handle(text){
 function execute(c){
   switch(c.intent){
     case 'expense':{
-      const e={id:uid(),amount:+c.amount,merchant:c.merchant||'Einkauf',category:c.category||'Sonstiges',date:c.date||isoDate(new Date()),note:c.note||'',photo:null,created:Date.now(),fromReserve:!!c.fromReserve};
+      const e={id:uid(),amount:+c.amount,merchant:c.merchant||'Einkauf',category:c.category||'Sonstiges',date:c.date||isoDate(new Date()),note:c.note||'',photo:null,created:Date.now(),fromReserve:!!c.fromReserve,kind:'expense',pay:c.pay||S.settings.defaultPay};
       S.entries.push(e);save();
       const st=catStatus(e.category,e.date.slice(0,7));
       let warn='';if(st.budget>0){warn=st.spent>st.budget?` ⚠️ Budget „${e.category}" um ${money(st.spent-st.budget)} überschritten.`:` Noch ${money(st.budget-st.spent)} in „${e.category}".`;}
-      const say=e.fromReserve?`${money(e.amount)} bei ${e.merchant} aus den Rücklagen gebucht. Rücklagen jetzt ${money(pots().reserve)}.`:`${money(e.amount)} bei ${e.merchant} als ${e.category} gebucht.${warn}`;
+      const payTxt=e.pay!=='konto'?` (${PAY_LABEL(e.pay)})`:'';
+      const say=e.fromReserve?`${money(e.amount)} bei ${e.merchant}${payTxt} aus den Rücklagen gebucht. Rücklagen jetzt ${money(pots().reserve)}.`:`${money(e.amount)} bei ${e.merchant} als ${e.category}${payTxt} gebucht.${warn}`;
       return {say,html:esc(say)+`<div class="act"><button class="btn" onclick="openEntry('${e.id}')">Bearbeiten</button><button class="btn" onclick="undoEntry('${e.id}')">Rückgängig</button></div>`};
     }
     case 'reminder':{
@@ -587,8 +616,9 @@ function execute(c){
       return {say,html:esc(say)+`<div class="act"><button class="btn" onclick="show('book')">Haushaltsbuch öffnen</button></div>`};
     }
     case 'fixed':{S.plan.fixed.push({id:uid(),name:c.name,amount:c.amount,interval:c.interval,due:c.due||null});save();const say=`Fixkosten „${c.name}" mit ${money(c.amount)} ${({1:'monatlich',3:'vierteljährlich',6:'halbjährlich',12:'jährlich'})[c.interval]} angelegt. Frei verfügbar jetzt ${money(planAvailable())}.`;return {say,html:esc(say)};}
+    case 'withdraw':{const e={id:uid(),amount:+c.amount,merchant:'Bargeldabhebung',category:'Sonstiges',date:c.date,note:'',photo:null,created:Date.now(),fromReserve:false,kind:'withdraw',pay:c.pay};S.entries.push(e);save();const say=`${money(e.amount)} Bargeld abgehoben mit ${PAY_LABEL(e.pay)}. In der Tasche jetzt ${money(cashBalance())}.`;return {say,html:esc(say)+`<div class="act"><button class="btn" onclick="openEntry('${e.id}')">Bearbeiten</button></div>`};}
     case 'pots':{const P=pots();const say=S.plan.income>0?`Im Spartopf sind rechnerisch ${money(P.savings)}, in den Rücklagen ${money(P.reserve)}.`:'Lege zuerst unter Budgets einen Monatsplan an.';return {say,html:esc(say)};}
-    case 'help':{const h='Ich kann: Ausgaben buchen („zwölf Euro fünfzig bei Rewe"), Fixkosten anlegen („Fixkosten Netflix 12,99 monatlich" oder „… Versicherung 240 jährlich am 15.3."), Ausgaben aus Rücklagen („80 Euro Reparatur aus Rücklagen"), Topfstände nennen („Wie viel ist in den Rücklagen?"), Monats- oder Kategoriestand nennen, Erinnerungen und Termine anlegen, Notizen speichern, SMS vorbereiten, anrufen, den letzten Eintrag rückgängig machen und Bereiche öffnen („öffne Budgets").';return {say:h,html:esc(h)};}
+    case 'help':{const h='Ich kann: Ausgaben buchen („zwölf Euro fünfzig bei Rewe"), Fixkosten anlegen („Fixkosten Netflix 12,99 monatlich" oder „… Versicherung 240 jährlich am 15.3."), Ausgaben aus Rücklagen („80 Euro Reparatur aus Rücklagen"), Zahlungsart erkennen („… mit Karte 2", „… bar"), Bargeldabhebungen („200 Euro abgehoben"), Topfstände nennen („Wie viel ist in den Rücklagen?"), Monats- oder Kategoriestand nennen, Erinnerungen und Termine anlegen, Notizen speichern, SMS vorbereiten, anrufen, den letzten Eintrag rückgängig machen und Bereiche öffnen („öffne Budgets").';return {say:h,html:esc(h)};}
     case 'undo':{
       const last=S.entries.slice().sort((a,b)=>b.created-a.created)[0];
       if(!last)return {say:'Es gibt keinen Eintrag zum Löschen.',html:'Es gibt keinen Eintrag zum Löschen.'};
@@ -622,9 +652,14 @@ $('hints').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('textCmd').val
 /* ===================== Haushaltsbuch ===================== */
 function monthLabel(mk){const [y,m]=mk.split('-');return new Date(+y,+m-1,1).toLocaleDateString('de-DE',{month:'long',year:'numeric'});}
 function entriesOf(mk){return S.entries.filter(e=>e.date.startsWith(mk));}
-function monthTotal(mk){return entriesOf(mk).filter(e=>!e.fromReserve).reduce((s,e)=>s+e.amount,0);}
-function reserveTotal(mk){return entriesOf(mk).filter(e=>e.fromReserve).reduce((s,e)=>s+e.amount,0);}
-function catStatus(cat,mk){const spent=entriesOf(mk).filter(e=>e.category===cat&&!e.fromReserve).reduce((s,e)=>s+e.amount,0);return {spent,budget:+(S.budgets.byCat[cat]||0)};}
+function monthTotal(mk){return entriesOf(mk).filter(e=>!e.fromReserve&&e.kind!=='withdraw').reduce((s,e)=>s+e.amount,0);}
+function reserveTotal(mk){return entriesOf(mk).filter(e=>e.fromReserve&&e.kind!=='withdraw').reduce((s,e)=>s+e.amount,0);}
+function catStatus(cat,mk){const spent=entriesOf(mk).filter(e=>e.category===cat&&!e.fromReserve&&e.kind!=='withdraw').reduce((s,e)=>s+e.amount,0);return {spent,budget:+(S.budgets.byCat[cat]||0)};}
+const PAY_LABEL=id=>id==='konto'?'Konto':id==='bar'?'Bargeld':(S.cards.find(c=>c.id===id)||{}).name||id;
+function payOptions(){return [{id:'konto',name:'Konto / EC'},...S.cards,{id:'bar',name:'Bargeld'}];}
+function debitMonth(dateStr,card){const d=new Date(dateStr+'T00:00');let y=d.getFullYear(),m=d.getMonth();if(d.getDate()>=card.cut)m+=1;m+=card.offset||0;return isoDate(new Date(y,m,1)).slice(0,7);}
+function cardOpen(card){const cur=isoDate(new Date()).slice(0,7);const by={};let total=0;for(const e of S.entries){if(e.pay!==card.id)continue;const dm=debitMonth(e.date,card);if(dm<cur)continue;by[dm]=(by[dm]||0)+e.amount;total+=e.amount;}return {total,by};}
+function cashBalance(){let c=+S.settings.cashStart||0;for(const e of S.entries){if(e.kind==='withdraw')c+=e.amount;else if(e.pay==='bar')c-=e.amount;}return c;}
 function addMonths(d,n){const x=new Date(d);x.setMonth(x.getMonth()+n);return x;}
 function nextDue(f){if(!f.due)return null;let d=new Date(f.due+'T00:00');const today=new Date();today.setHours(0,0,0,0);let g=0;while(d<today&&g++<400)d=addMonths(d,f.interval||1);return d;}
 function accrued(f){if(!f.due||(f.interval||1)===1)return null;const nd=nextDue(f);const last=addMonths(nd,-(f.interval));const now=new Date();const months=Math.max(0,Math.min(f.interval,(now.getFullYear()-last.getFullYear())*12+now.getMonth()-last.getMonth()));return {saved:f.amount/f.interval*months,of:f.amount,next:nd};}
@@ -667,6 +702,11 @@ function renderBook(){
       <div class="muted small" style="margin-top:6px">Voraussichtlicher Übertrag aus diesem Monat: <b style="${curSurplus<0?'color:var(--danger)':''}">${money(curSurplus)}</b></div>
       ${dueNow.length?`<div style="margin-top:10px"><b class="small">Diesen Monat fällig</b>${dueNow.map(f=>`<div class="cat-row"><div class="n">${esc(f.name)}<div class="muted small">${fmtDate(nextDue(f))}</div></div><div class="v">${money(f.amount)}</div></div>`).join('')}</div>`:''}`;
   }else{$('potsCard').style.display='none';}
+  let openSum=0;
+  const cardRows=S.cards.map(c=>{const o=cardOpen(c);openSum+=o.total;const parts=Object.keys(o.by).sort().map(mk=>`${monthLabel(mk).split(' ')[0]}: ${money(o.by[mk])}`).join(' · ');return `<div class="cat-row"><div class="n">${esc(c.name)} offen<div class="muted small">${parts||'nichts offen'}</div></div><div class="v"><b>${money(o.total)}</b></div></div>`;}).join('');
+  $('cardsCard').innerHTML=`<h3>Karten & Bargeld</h3>${cardRows}
+    <div class="cat-row"><div class="n">Bargeld in der Tasche</div><div class="v"><b style="${cashBalance()<0?'color:var(--danger)':''}">${money(cashBalance())}</b></div></div>
+    ${openSum?`<div class="muted small" style="margin-top:6px">Noch nicht vom Konto abgebucht: ${money(openSum)}. Dein Konto steht um diesen Betrag höher, als es dir wirklich zur Verfügung steht.</div>`:''}`;
   let rows='';
   for(const c of S.categories){const st=catStatus(c,month);if(!st.spent&&!st.budget)continue;
     const pct=st.budget?Math.min(100,st.spent/st.budget*100):0;
@@ -674,7 +714,7 @@ function renderBook(){
   $('bookCats').innerHTML=`<h3 style="margin-bottom:6px">Nach Kategorie</h3>`+(rows||'<div class="empty">Noch keine Einträge in diesem Monat.</div>');
   const sel=$('filterCat');const cur=sel.value;sel.innerHTML='<option value="">Alle</option>'+S.categories.map(c=>`<option>${esc(c)}</option>`).join('');sel.value=cur;
   const list=entriesOf(month).filter(e=>!sel.value||e.category===sel.value).sort((a,b)=>b.date.localeCompare(a.date)||b.created-a.created);
-  $('entries').innerHTML=list.length?list.map(e=>`<div class="entry" onclick="openEntry('${e.id}')"><div class="th">${e.photo?`<img src="${e.photo}" alt="">`:catIcon(e.category)}</div><div class="t"><b>${esc(e.merchant)}</b><span class="muted small">${fmtDate(e.date)} · ${esc(e.category)}${e.fromReserve?' · <span class="pill">Rücklagen</span>':''}${e.note?' · '+esc(e.note):''}</span></div><div class="a">${money(e.amount)}</div></div>`).join(''):'<div class="empty">Keine Einkäufe. Sag „12 Euro bei Rewe" oder tippe auf „Manuell".</div>';
+  $('entries').innerHTML=list.length?list.map(e=>`<div class="entry" onclick="openEntry('${e.id}')"><div class="th">${e.photo?`<img src="${e.photo}" alt="">`:e.kind==='withdraw'?'🏧':catIcon(e.category)}</div><div class="t"><b>${esc(e.merchant)}</b><span class="muted small">${fmtDate(e.date)} · ${e.kind==='withdraw'?'Abhebung':esc(e.category)}${e.pay&&e.pay!=='konto'?' · '+esc(PAY_LABEL(e.pay)):''}${e.fromReserve?' · <span class="pill">Rücklagen</span>':''}${e.note?' · '+esc(e.note):''}</span></div><div class="a" style="${e.kind==='withdraw'?'color:var(--muted);font-weight:500':''}">${e.kind==='withdraw'?'↔ ':''}${money(e.amount)}</div></div>`).join(''):'<div class="empty">Keine Einkäufe. Sag „12 Euro bei Rewe" oder tippe auf „Manuell".</div>';
 }
 function catIcon(c){return {'Lebensmittel':'🛒','Restaurant & Café':'🍽️','Transport':'🚗','Wohnen':'🏠','Freizeit':'🎟️','Kleidung':'👕','Gesundheit':'💊'}[c]||'💳';}
 $('filterCat').onchange=renderBook;
@@ -686,6 +726,8 @@ function openEntry(id){
   $('eCat').innerHTML=S.categories.map(c=>`<option>${esc(c)}</option>`).join('');
   $('eAmount').value=e?e.amount:'';$('eMerchant').value=e?e.merchant:'';$('eCat').value=e?e.category:'Lebensmittel';
   $('eDate').value=e?e.date:isoDate(new Date());$('eNote').value=e?e.note:'';$('eReserve').checked=!!(e&&e.fromReserve);
+  $('ePay').innerHTML=payOptions().map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('');$('ePay').value=e?(e.pay||'konto'):S.settings.defaultPay;
+  $('eKind').value=e?(e.kind||'expense'):'expense';$('eKind').onchange=()=>{const w=$('eKind').value==='withdraw';$('eCat').closest('.field').style.display=w?'none':'';$('eReserve').parentElement.style.display=w?'none':'';if(w&&!editId){$('ePay').value=S.settings.withdrawCard;if(!$('eMerchant').value)$('eMerchant').value='Bargeldabhebung';}};$('eKind').onchange();
   pendingPhoto=e?e.photo:null;$('ePreview').hidden=!pendingPhoto;if(pendingPhoto)$('ePreview').src=pendingPhoto;
   $('eAI').hidden=true;$('eDelete').hidden=!e;
   $('mEntry').classList.add('open');if(!e)setTimeout(()=>$('eAmount').focus(),50);
@@ -693,7 +735,7 @@ function openEntry(id){
 $('addManual').onclick=()=>openEntry(null);
 $('eSave').onclick=()=>{
   const amount=parseFloat(String($('eAmount').value).replace(',','.'));if(!(amount>0)){toast('Bitte einen Betrag eingeben');return;}
-  const data={amount,merchant:$('eMerchant').value.trim()||'Einkauf',category:$('eCat').value,date:$('eDate').value||isoDate(new Date()),note:$('eNote').value.trim(),photo:pendingPhoto,fromReserve:$('eReserve').checked};
+  const data={amount,merchant:$('eMerchant').value.trim()||'Einkauf',category:$('eCat').value,date:$('eDate').value||isoDate(new Date()),note:$('eNote').value.trim(),photo:pendingPhoto,fromReserve:$('eKind').value==='withdraw'?false:$('eReserve').checked,kind:$('eKind').value,pay:$('ePay').value};
   if(editId){Object.assign(S.entries.find(x=>x.id===editId),data);}else{S.entries.push(Object.assign({id:uid(),created:Date.now()},data));}
   save();$('mEntry').classList.remove('open');render();toast('Gespeichert');
 };
@@ -811,12 +853,20 @@ $('notifBtn').onclick=async()=>{
 
 /* ===================== Mehr ===================== */
 function renderMore(){
+  $('cardSettings').innerHTML=S.cards.map((c,i)=>`<div style="padding:8px 0;border-top:1px solid var(--line)"><div class="field"><label class="f">Name der ${i+1}. Karte (so sagst du sie auch per Sprache)</label><input type="text" value="${esc(c.name)}" data-cid="${c.id}" data-f="name" placeholder="z. B. Amex, DKB Visa"></div><div class="grid2" style="margin-top:8px"><div class="field"><label class="f">Stichtag (Tag im Monat)</label><input type="number" min="1" max="28" value="${c.cut}" data-cid="${c.id}" data-f="cut"></div><div class="field"><label class="f">Abbuchung</label><select data-cid="${c.id}" data-f="offset"><option value="0" ${c.offset==0?'selected':''}>im selben Monat</option><option value="1" ${c.offset==1?'selected':''}>im Folgemonat</option></select></div></div></div>`).join('');
+  $('cardSettings').querySelectorAll('[data-cid]').forEach(i=>i.onchange=()=>{const c=S.cards.find(x=>x.id===i.dataset.cid);c[i.dataset.f]=i.dataset.f==='name'?i.value.trim()||c.name:+i.value;save();render();});
+  $('setDefaultPay').innerHTML=payOptions().map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('');$('setDefaultPay').value=S.settings.defaultPay;
+  $('setWithdrawCard').innerHTML=payOptions().filter(o=>o.id!=='bar').map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('');$('setWithdrawCard').value=S.settings.withdrawCard;
+  $('setCashStart').value=S.settings.cashStart||'';
   $('contacts').innerHTML=S.contacts.length?S.contacts.map(c=>`<div class="item row between"><div><b>${esc(c.name)}</b><div class="muted small">${esc(c.phone)}</div></div><button class="btn ghost" onclick="delContact('${c.id}')">✕</button></div>`).join(''):'<div class="empty small">Noch keine Kontakte.</div>';
   $('setSpeak').checked=!!S.settings.speak;
 }
 $('addContact').onclick=()=>{const n=$('cName').value.trim(),p=$('cPhone').value.trim();if(!n||!p){toast('Name und Nummer angeben');return;}S.contacts.push({id:uid(),name:n,phone:p});$('cName').value='';$('cPhone').value='';save();render();};
 function delContact(id){S.contacts=S.contacts.filter(c=>c.id!==id);save();render();}
 $('setSpeak').onchange=()=>{S.settings.speak=$('setSpeak').checked;save();};
+$('setDefaultPay').onchange=()=>{S.settings.defaultPay=$('setDefaultPay').value;save();};
+$('setWithdrawCard').onchange=()=>{S.settings.withdrawCard=$('setWithdrawCard').value;save();};
+$('setCashStart').onchange=()=>{S.settings.cashStart=+$('setCashStart').value||0;save();renderBook();};
 $('exportBtn').onclick=async()=>{
   const txt=JSON.stringify(S);
   if(navigator.share){try{await navigator.share({title:'Assistent Backup',text:txt});return;}catch(e){}}

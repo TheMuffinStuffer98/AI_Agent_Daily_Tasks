@@ -629,6 +629,7 @@ function execute(c){
     default:return {say:'Das habe ich nicht verstanden.',html:'Das habe ich nicht verstanden. Beispiele: „23,50 bei Rewe für Lebensmittel", „Erinnere mich morgen um 9 an …", „Termin Freitag 15 Uhr Zahnarzt", „Schreib an Anna: …"'};
   }
 }
+function delEntry(id){if(confirm('Eintrag löschen?')){S.entries=S.entries.filter(e=>e.id!==id);save();render();toast('Gelöscht');}}
 function undoEntry(id){S.entries=S.entries.filter(e=>e.id!==id);save();render();toast('Einkauf entfernt');}
 
 /* ===================== Spracheingabe ===================== */
@@ -706,14 +707,15 @@ function renderBook(){
   const cardRows=S.cards.map(c=>{const o=cardOpen(c);openSum+=o.total;const parts=Object.keys(o.by).sort().map(mk=>`${monthLabel(mk).split(' ')[0]}: ${money(o.by[mk])}`).join(' · ');return `<div class="cat-row"><div class="n">${esc(c.name)} offen<div class="muted small">${parts||'nichts offen'}</div></div><div class="v"><b>${money(o.total)}</b></div></div>`;}).join('');
   $('cardsCard').innerHTML=`<h3>Karten & Bargeld</h3>${cardRows}
     <div class="cat-row"><div class="n">Bargeld in der Tasche</div><div class="v"><b style="${cashBalance()<0?'color:var(--danger)':''}">${money(cashBalance())}</b></div></div>
-    ${openSum?`<div class="muted small" style="margin-top:6px">Noch nicht vom Konto abgebucht: ${money(openSum)}. Dein Konto steht um diesen Betrag höher, als es dir wirklich zur Verfügung steht.</div>`:''}`;
+    ${openSum?`<div class="muted small" style="margin-top:6px">Noch nicht vom Konto abgebucht: ${money(openSum)}. Dein Konto steht um diesen Betrag höher, als es dir wirklich zur Verfügung steht.</div>`:''}
+    ${(()=>{const w=S.entries.filter(e=>e.kind==='withdraw').sort((a,b)=>b.date.localeCompare(a.date)||b.created-a.created).slice(0,8);return w.length?`<div style="margin-top:10px"><b class="small">Letzte Abhebungen</b>${w.map(e=>`<div class="cat-row"><div class="n" onclick="openEntry('${e.id}')">${fmtDate(e.date)} · ${esc(PAY_LABEL(e.pay))}${e.note?' · '+esc(e.note):''}</div><div class="v"><b>${money(e.amount)}</b></div><button class="btn ghost" onclick="delEntry('${e.id}')" aria-label="Löschen">✕</button></div>`).join('')}</div>`:'';})()}`;
   let rows='';
   for(const c of S.categories){const st=catStatus(c,month);if(!st.spent&&!st.budget)continue;
     const pct=st.budget?Math.min(100,st.spent/st.budget*100):0;
     rows+=`<div class="cat-row"><div class="n"><div>${esc(c)}</div>${st.budget?`<div class="bar" style="margin-top:5px"><i class="${barClass(st.spent,st.budget)}" style="width:${pct}%"></i></div>`:''}</div><div class="v"><b>${money(st.spent)}</b>${st.budget?`<div class="muted small">/ ${money(st.budget)}</div>`:''}</div></div>`;}
   $('bookCats').innerHTML=`<h3 style="margin-bottom:6px">Nach Kategorie</h3>`+(rows||'<div class="empty">Noch keine Einträge in diesem Monat.</div>');
-  const sel=$('filterCat');const cur=sel.value;sel.innerHTML='<option value="">Alle</option>'+S.categories.map(c=>`<option>${esc(c)}</option>`).join('');sel.value=cur;
-  const list=entriesOf(month).filter(e=>!sel.value||e.category===sel.value).sort((a,b)=>b.date.localeCompare(a.date)||b.created-a.created);
+  const sel=$('filterCat');const cur=sel.value;sel.innerHTML='<option value="">Alle</option><option value="__withdraw">Abhebungen</option>'+S.categories.map(c=>`<option>${esc(c)}</option>`).join('');sel.value=cur;
+  const list=entriesOf(month).filter(e=>!sel.value||(sel.value==='__withdraw'?e.kind==='withdraw':(e.category===sel.value&&e.kind!=='withdraw'))).sort((a,b)=>b.date.localeCompare(a.date)||b.created-a.created);
   $('entries').innerHTML=list.length?list.map(e=>`<div class="entry" onclick="openEntry('${e.id}')"><div class="th">${e.photo?`<img src="${e.photo}" alt="">`:e.kind==='withdraw'?'🏧':catIcon(e.category)}</div><div class="t"><b>${esc(e.merchant)}</b><span class="muted small">${fmtDate(e.date)} · ${e.kind==='withdraw'?'Abhebung':esc(e.category)}${e.pay&&e.pay!=='konto'?' · '+esc(PAY_LABEL(e.pay)):''}${e.fromReserve?' · <span class="pill">Rücklagen</span>':''}${e.note?' · '+esc(e.note):''}</span></div><div class="a" style="${e.kind==='withdraw'?'color:var(--muted);font-weight:500':''}">${e.kind==='withdraw'?'↔ ':''}${money(e.amount)}</div></div>`).join(''):'<div class="empty">Keine Einkäufe. Sag „12 Euro bei Rewe" oder tippe auf „Manuell".</div>';
 }
 function catIcon(c){return {'Lebensmittel':'🛒','Restaurant & Café':'🍽️','Transport':'🚗','Wohnen':'🏠','Freizeit':'🎟️','Kleidung':'👕','Gesundheit':'💊'}[c]||'💳';}

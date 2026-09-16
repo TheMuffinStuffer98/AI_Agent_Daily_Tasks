@@ -179,15 +179,31 @@ nav.tabs svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1
 <section class="view" id="view-budget">
   <div class="card">
     <h3>Monatsplan</h3>
-    <div class="field" style="margin-top:8px"><label class="f">Nettogehalt / Einnahmen pro Monat</label><div class="row"><input type="number" id="pIncome" inputmode="decimal" min="0" step="1"><span>€</span></div></div>
-    <div class="field"><label class="f">Sparrate (wird zuerst abgezogen)</label><div class="row"><input type="number" id="pSavings" inputmode="decimal" min="0" step="1"><span>€</span></div></div>
-    <div class="field"><label class="f">Rücklagen für Unregelmäßiges (Geschenke, Reparaturen, Urlaub)</label><div class="row"><input type="number" id="pReserve" inputmode="decimal" min="0" step="1"><span>€</span></div></div>
+    <div class="field" style="margin-top:8px"><label class="f">Grundgehalt netto pro Monat (Standard)</label><div class="row"><input type="number" id="pIncome" inputmode="decimal" min="0" step="1"><span>€</span></div></div>
+    <div class="field"><label class="f">Sparrate (Standard, wird zuerst abgezogen)</label><div class="row"><input type="number" id="pSavings" inputmode="decimal" min="0" step="1"><span>€</span></div></div>
+    <div class="field"><label class="f">Rücklagen (Standard) für Unregelmäßiges</label><div class="row"><input type="number" id="pReserve" inputmode="decimal" min="0" step="1"><span>€</span></div></div>
     <div class="grid2" style="margin-top:10px">
       <div class="field"><label class="f">Spartopf Startsaldo</label><input type="number" id="pSavStart" inputmode="decimal" step="1"></div>
       <div class="field"><label class="f">Rücklagen Startsaldo</label><input type="number" id="pResStart" inputmode="decimal" step="1"></div>
     </div>
     <div class="field"><label class="f">Plan gilt ab Monat</label><input type="month" id="pStart"></div>
     <p class="muted small">Die Töpfe wachsen ab diesem Monat rechnerisch um die Raten. Ein Monatsüberschuss wandert in die Rücklagen, ein Minus wird aus den Rücklagen gedeckt.</p>
+  </div>
+  <div class="card">
+    <div class="month-nav" style="margin:-4px 0 6px"><button id="mPrev2" aria-label="Vormonat">‹</button><h3 id="mLabel2"></h3><button id="mNext2" aria-label="Folgemonat">›</button></div>
+    <p class="muted small">Nur für diesen Monat. Leer = Standard aus dem Monatsplan.</p>
+    <div class="grid2" style="margin-top:8px">
+      <div class="field"><label class="f">Sparrate diesen Monat</label><input type="number" id="mSavings" inputmode="decimal" min="0" step="1" placeholder="Standard"></div>
+      <div class="field"><label class="f">Rücklagen diesen Monat</label><input type="number" id="mReserve" inputmode="decimal" min="0" step="1" placeholder="Standard"></div>
+    </div>
+    <h3 style="margin-top:12px;font-size:14px">Extras zum Gehalt</h3>
+    <div id="extrasList"></div>
+    <div class="row" style="margin-top:8px">
+      <input type="text" id="exLabel" placeholder="z. B. Prämie" style="flex:2">
+      <input type="number" id="exAmount" inputmode="decimal" step="0.01" placeholder="€" style="flex:1;min-width:80px">
+      <button class="btn" id="addExtra">＋</button>
+    </div>
+    <div class="muted small" style="margin-top:8px" id="monthCalc"></div>
   </div>
   <div class="card">
     <h3>Fixkosten</h3>
@@ -198,6 +214,7 @@ nav.tabs svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1
       <input type="number" id="fxAmount" inputmode="decimal" min="0" step="0.01" placeholder="€" style="flex:1;min-width:80px">
       <select id="fxInt" style="flex:1;min-width:110px"><option value="1">monatlich</option><option value="3">vierteljährlich</option><option value="6">halbjährlich</option><option value="12">jährlich</option></select>
       <input type="date" id="fxDue" style="flex:1;min-width:140px" title="Nächste Fälligkeit">
+      <select id="fxPay" style="flex:1;min-width:120px" title="Zahlungsmittel"></select>
       <button class="btn" id="addFixed">＋</button>
     </div>
   </div>
@@ -210,6 +227,20 @@ nav.tabs svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1
       <input type="text" id="newCat" placeholder="Neue Kategorie">
       <button class="btn" id="addCat">Hinzufügen</button>
     </div>
+  </div>
+</section>
+
+<!-- ================= VERLAUF ================= -->
+<section class="view" id="view-chart">
+  <div class="card">
+    <div class="row between"><h3>Ausgaben je Monat</h3><select id="chartCat" style="width:auto;padding:6px 10px"><option value="">Gesamt</option></select></div>
+    <div id="chartSpend" style="margin-top:8px"></div>
+    <p class="muted small" id="chartSpendNote"></p>
+  </div>
+  <div class="card">
+    <h3>Einnahmen je Monat</h3>
+    <div id="chartIncome" style="margin-top:8px"></div>
+    <p class="muted small">Grundgehalt plus Extras des jeweiligen Monats.</p>
   </div>
 </section>
 
@@ -243,8 +274,13 @@ nav.tabs svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1
   </div>
   <div class="card">
     <h3>Karten & Bargeld</h3>
-    <p class="muted small">Namen frei wählbar. Stichtag = erster Tag des neuen Abrechnungszeitraums; Abbuchung im Monat des Zeitraumendes oder im Folgemonat. „Karte 1" / „Karte 2" per Sprache funktioniert zusätzlich immer.</p>
+    <p class="muted small">Beliebig viele Konten und Kreditkarten. Konten werden sofort belastet. Bei Kreditkarten: Stichtag = erster Tag des neuen Abrechnungszeitraums, Abbuchung im Monat des Zeitraumendes oder im Folgemonat. Per Sprache: Name sagen oder „Karte 1", „Karte 2" (Reihenfolge der Kreditkarten).</p>
     <div id="cardSettings" class="stack" style="margin-top:8px"></div>
+    <div class="row" style="margin-top:10px;flex-wrap:wrap">
+      <input type="text" id="ncName" placeholder="Name" style="flex:2;min-width:110px">
+      <select id="ncType" style="flex:1;min-width:120px"><option value="konto">Konto (sofort)</option><option value="kredit">Kreditkarte</option></select>
+      <button class="btn" id="addCard">＋</button>
+    </div>
     <div class="grid2" style="margin-top:10px">
       <div class="field"><label class="f">Standard-Zahlungsart</label><select id="setDefaultPay"></select></div>
       <div class="field"><label class="f">Abhebungen meist mit</label><select id="setWithdrawCard"></select></div>
@@ -274,6 +310,7 @@ nav.tabs svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1
   <button data-v="assist" class="active"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Assistent</button>
   <button data-v="book"><svg viewBox="0 0 24 24"><path d="M4 4h12a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3z"/><path d="M4 17a3 3 0 0 1 3-3h12"/></svg>Buch</button>
   <button data-v="budget"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5c0-1 1-2 3-2s3 1 3 2-1 2-3 2-3 1-3 2 1 2 3 2 3-1 3-2"/></svg>Budgets</button>
+  <button data-v="chart"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Verlauf</button>
   <button data-v="notes"><svg viewBox="0 0 24 24"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5M9 13h6M9 17h6"/></svg>Notizen</button>
   <button data-v="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>Mehr</button>
 </nav>
@@ -342,7 +379,10 @@ function fill(s){
   s.adjust=s.adjust||[];
   s.notes=s.notes||[];s.reminders=s.reminders||[];s.events=s.events||[];s.contacts=s.contacts||[];
   s.settings=Object.assign({speak:true,defaultPay:'konto',withdrawCard:'k2',cashStart:0},s.settings||{});
-  s.cards=s.cards||[{id:'k1',name:'Karte 1',cut:22,offset:0},{id:'k2',name:'Karte 2',cut:8,offset:1}];
+  s.cards=s.cards||[{id:'k1',name:'Karte 1',type:'kredit',cut:22,offset:0},{id:'k2',name:'Karte 2',type:'kredit',cut:8,offset:1}];
+  s.cards.forEach(c=>{if(!c.type)c.type='kredit';});
+  if(!s.cards.some(c=>c.id==='konto'))s.cards.unshift({id:'konto',name:'Girokonto',type:'konto'});
+  s.months=s.months||{};
   s.chat=s.chat||[];return s;
 }
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){toast('Speichern fehlgeschlagen (Speicher voll?)');}}
@@ -412,7 +452,7 @@ document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>show(b.dat
 function show(v){
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id==='view-'+v));
   document.querySelectorAll('nav.tabs button').forEach(x=>x.classList.toggle('active',x.dataset.v===v));
-  $('hdrTitle').textContent={assist:'Assistent',book:'Haushaltsbuch',budget:'Budgets',notes:'Notizen',more:'Mehr'}[v];
+  $('hdrTitle').textContent={assist:'Assistent',book:'Haushaltsbuch',budget:'Budgets',chart:'Verlauf',notes:'Notizen',more:'Mehr'}[v];
   $('hdrSub').textContent=v==='book'||v==='budget'?monthLabel(month):'';
   render();window.scrollTo(0,0);
 }
@@ -488,9 +528,9 @@ function guessCat(t){
 function detectPay(text){
   const t=text.toLowerCase();let m;
   if(/\b(in )?bar\b|\bbargeld\b|\bcash\b/.test(t)&&!/abgehoben|abheb|geholt|gezogen/.test(t))return 'bar';
-  if(/\b(mit|per|via|über|ueber)\s+(dem |der )?(konto|ec|girocard|ec[- ]karte)\b/.test(t))return 'konto';
+  if(/\b(mit|per|via|über|ueber)\s+(dem |der )?(konto|ec|girocard|ec[- ]karte)\b/.test(t)){const k=S.cards.find(x=>x.type==='konto');if(k)return k.id;}
   const words={eins:1,zwei:2,drei:3,vier:4};
-  if((m=t.match(/\b(?:mit |per |via )?(?:der |dem )?(?:kredit)?karte\s*(\d|eins|zwei|drei|vier)\b/))){const n=/^\d$/.test(m[1])?+m[1]:words[m[1]];const c=S.cards[n-1];if(c)return c.id;}
+  if((m=t.match(/\b(?:mit |per |via )?(?:der |dem )?(?:kredit)?karte\s*(\d|eins|zwei|drei|vier)\b/))){const n=/^\d$/.test(m[1])?+m[1]:words[m[1]];const c=S.cards.filter(x=>x.type==='kredit')[n-1];if(c)return c.id;}
   for(const c of S.cards){if(t.includes(c.name.toLowerCase()))return c.id;}
   return null;
 }
@@ -506,11 +546,15 @@ function parseCommand(raw){
   if(/(letzten|letzte|letzter)\s+(eintrag|einkauf|ausgabe|buchung)\s*(löschen|loeschen|entfernen|rückgängig|rueckgaengig|zurück)|rückgängig|rueckgaengig|^undo/.test(t))return {intent:'undo'};
   if((m=t.match(/^(öffne|oeffne|zeig(?:e)?(?:\s+mir)?|geh(?:e)?\s+zu)\s+(?:das\s+|die\s+|den\s+|mein\s+)?(haushaltsbuch|buch|ausgaben|budgets?|notizen|erinnerungen|termine|einstellungen)/)))
     return {intent:'open',view:/budget/.test(m[2])?'budget':/notiz|erinner|termin/.test(m[2])?'notes':/einstell/.test(m[2])?'more':'book'};
+  if((m=text.match(/^(?:prämie|praemie|bonus|zuschlag|zuschläge|urlaubsgeld|weihnachtsgeld|extra|zusatzeinnahme|einnahme|nebenverdienst)\b\s*[:\-]?\s*(.*)$/i))){
+    const amount=parseAmount(text);if(amount){const label=text.match(/^([a-zäöüß]+)/i)[1];const rest=m[1].replace(/\b\d+(?:[.,]\d{1,2})?\b/g,'').replace(/\b(€|euro|eur)\b/gi,'').trim();return {intent:'extra',label:rest?label+' '+rest:label,amount,mk:isoDate(parseWhen(text)||new Date()).slice(0,7)};}
+  }
   if((m=text.match(/^(?:fixkosten?|abo|fixe?\s+kosten)\s*[:\-]?\s*(.+)$/i))){
     const amount=parseAmount(m[1]);const iv=/jährlich|jaehrlich|pro jahr|im jahr/i.test(m[1])?12:/halbjähr|halbjaehr/i.test(m[1])?6:/vierteljähr|vierteljaehr|quartal/i.test(m[1])?3:1;
     const name=m[1].replace(/\b\d+(?:[.,]\d{1,2})?\b/g,' ').replace(/\b(€|euro|eur|cent|monatlich|jährlich|jaehrlich|halbjährlich|vierteljährlich|pro (monat|jahr|quartal)|im (monat|jahr)|für|fuer)\b/gi,' ').replace(/\s+/g,' ').trim();
     const dd=m[1].match(/\b(\d{1,2})\.(\d{1,2})\.?(\d{2,4})?/);let due=null;if(dd){const w=parseWhen(m[1]);if(w)due=isoDate(w);}
-    if(amount&&name)return {intent:'fixed',name:name.replace(/\b(am|ab)\s*$/i,'').trim(),amount,interval:iv,due};
+    const fpay=detectPay(m[1])||S.settings.defaultPay;const cleanName=name.replace(/\s*(mit|per|via)\s+.*$/i,'').replace(/\b(in )?bar\b/i,'').replace(/\b(am|ab)\s*$/i,'').trim();
+    if(amount&&cleanName)return {intent:'fixed',name:cleanName,amount,interval:iv,due,pay:fpay};
   }
   // SMS
   if((m=text.match(/^(?:schreib(?:e)?|sms|nachricht|text(?:e)?)\s+(?:an\s+)?([^:,]+?)\s*[:,]?\s+(.+)$/i))||(m=text.match(/^(?:schick|sende?)\s+(?:eine\s+)?(?:sms|nachricht)\s+an\s+([^:,]+?)\s*[:,]?\s+(.+)$/i))){
@@ -579,7 +623,7 @@ function execute(c){
       S.entries.push(e);save();
       const st=catStatus(e.category,e.date.slice(0,7));
       let warn='';if(st.budget>0){warn=st.spent>st.budget?` ⚠️ Budget „${e.category}" um ${money(st.spent-st.budget)} überschritten.`:` Noch ${money(st.budget-st.spent)} in „${e.category}".`;}
-      const payTxt=e.pay!=='konto'?` (${PAY_LABEL(e.pay)})`:'';
+      const payTxt=e.pay!==S.settings.defaultPay?` (${PAY_LABEL(e.pay)})`:'';
       const say=e.fromReserve?`${money(e.amount)} bei ${e.merchant}${payTxt} aus den Rücklagen gebucht. Rücklagen jetzt ${money(pots().reserve)}.`:`${money(e.amount)} bei ${e.merchant} als ${e.category}${payTxt} gebucht.${warn}`;
       return {say,html:esc(say)+`<div class="act"><button class="btn" onclick="openEntry('${e.id}')">Bearbeiten</button><button class="btn" onclick="undoEntry('${e.id}')">Rückgängig</button></div>`};
     }
@@ -611,14 +655,15 @@ function execute(c){
     case 'query':{
       const mk=isoDate(new Date()).slice(0,7);
       if(c.cat){const st=catStatus(c.cat,mk);const say=st.budget>0?`In „${c.cat}" hast du ${money(st.spent)} von ${money(st.budget)} ausgegeben, also noch ${money(Math.max(0,st.budget-st.spent))} übrig.`:`In „${c.cat}" hast du diesen Monat ${money(st.spent)} ausgegeben (kein Budget gesetzt).`;return {say,html:esc(say)};}
-      const tot=monthTotal(mk);const b=planAvailable();
+      const tot=monthTotal(mk);const b=planAvailable(mk);
       const say=b>0?(tot>b?`Diesen Monat hast du ${money(tot)} ausgegeben und damit dein freies Budget von ${money(b)} um ${money(tot-b)} überschritten.`:`Diesen Monat hast du ${money(tot)} ausgegeben. Von ${money(b)} frei verfügbar bleiben noch ${money(b-tot)}.`):`Diesen Monat hast du ${money(tot)} ausgegeben.`;
       return {say,html:esc(say)+`<div class="act"><button class="btn" onclick="show('book')">Haushaltsbuch öffnen</button></div>`};
     }
-    case 'fixed':{S.plan.fixed.push({id:uid(),name:c.name,amount:c.amount,interval:c.interval,due:c.due||null});save();const say=`Fixkosten „${c.name}" mit ${money(c.amount)} ${({1:'monatlich',3:'vierteljährlich',6:'halbjährlich',12:'jährlich'})[c.interval]} angelegt. Frei verfügbar jetzt ${money(planAvailable())}.`;return {say,html:esc(say)};}
+    case 'fixed':{S.plan.fixed.push({id:uid(),name:c.name,amount:c.amount,interval:c.interval,due:c.due||null,pay:c.pay||S.settings.defaultPay});save();const say=`Fixkosten „${c.name}" mit ${money(c.amount)} ${({1:'monatlich',3:'vierteljährlich',6:'halbjährlich',12:'jährlich'})[c.interval]}${c.pay&&c.pay!==S.settings.defaultPay?' über '+PAY_LABEL(c.pay):''} angelegt. Frei verfügbar jetzt ${money(planAvailable())}.`;return {say,html:esc(say)};}
+    case 'extra':{const mo=S.months[c.mk]||(S.months[c.mk]={});mo.extras=mo.extras||[];mo.extras.push({id:uid(),label:c.label,amount:c.amount});save();const say=`${money(c.amount)} „${c.label}" als Extra-Einnahme für ${monthLabel(c.mk)} eingetragen. Frei verfügbar jetzt ${money(planAvailable(c.mk))}.`;return {say,html:esc(say)};}
     case 'withdraw':{const e={id:uid(),amount:+c.amount,merchant:'Bargeldabhebung',category:'Sonstiges',date:c.date,note:'',photo:null,created:Date.now(),fromReserve:false,kind:'withdraw',pay:c.pay};S.entries.push(e);save();const say=`${money(e.amount)} Bargeld abgehoben mit ${PAY_LABEL(e.pay)}. In der Tasche jetzt ${money(cashBalance())}.`;return {say,html:esc(say)+`<div class="act"><button class="btn" onclick="openEntry('${e.id}')">Bearbeiten</button></div>`};}
     case 'pots':{const P=pots();const say=S.plan.income>0?`Im Spartopf sind rechnerisch ${money(P.savings)}, in den Rücklagen ${money(P.reserve)}.`:'Lege zuerst unter Budgets einen Monatsplan an.';return {say,html:esc(say)};}
-    case 'help':{const h='Ich kann: Ausgaben buchen („zwölf Euro fünfzig bei Rewe"), Fixkosten anlegen („Fixkosten Netflix 12,99 monatlich" oder „… Versicherung 240 jährlich am 15.3."), Ausgaben aus Rücklagen („80 Euro Reparatur aus Rücklagen"), Zahlungsart erkennen („… mit Karte 2", „… bar"), Bargeldabhebungen („200 Euro abgehoben"), Topfstände nennen („Wie viel ist in den Rücklagen?"), Monats- oder Kategoriestand nennen, Erinnerungen und Termine anlegen, Notizen speichern, SMS vorbereiten, anrufen, den letzten Eintrag rückgängig machen und Bereiche öffnen („öffne Budgets").';return {say:h,html:esc(h)};}
+    case 'help':{const h='Ich kann: Ausgaben buchen („zwölf Euro fünfzig bei Rewe"), Fixkosten anlegen („Fixkosten Netflix 12,99 monatlich" oder „… Versicherung 240 jährlich am 15.3."), Ausgaben aus Rücklagen („80 Euro Reparatur aus Rücklagen"), Zahlungsart erkennen („… mit Karte 2", „… bar"), Bargeldabhebungen („200 Euro abgehoben"), Extra-Einnahmen („Prämie 500 Euro"), Topfstände nennen („Wie viel ist in den Rücklagen?"), Monats- oder Kategoriestand nennen, Erinnerungen und Termine anlegen, Notizen speichern, SMS vorbereiten, anrufen, den letzten Eintrag rückgängig machen und Bereiche öffnen („öffne Budgets").';return {say:h,html:esc(h)};}
     case 'undo':{
       const last=S.entries.slice().sort((a,b)=>b.created-a.created)[0];
       if(!last)return {say:'Es gibt keinen Eintrag zum Löschen.',html:'Es gibt keinen Eintrag zum Löschen.'};
@@ -656,11 +701,22 @@ function entriesOf(mk){return S.entries.filter(e=>e.date.startsWith(mk));}
 function monthTotal(mk){return entriesOf(mk).filter(e=>!e.fromReserve&&e.kind!=='withdraw').reduce((s,e)=>s+e.amount,0);}
 function reserveTotal(mk){return entriesOf(mk).filter(e=>e.fromReserve&&e.kind!=='withdraw').reduce((s,e)=>s+e.amount,0);}
 function catStatus(cat,mk){const spent=entriesOf(mk).filter(e=>e.category===cat&&!e.fromReserve&&e.kind!=='withdraw').reduce((s,e)=>s+e.amount,0);return {spent,budget:+(S.budgets.byCat[cat]||0)};}
-const PAY_LABEL=id=>id==='konto'?'Konto':id==='bar'?'Bargeld':(S.cards.find(c=>c.id===id)||{}).name||id;
-function payOptions(){return [{id:'konto',name:'Konto / EC'},...S.cards,{id:'bar',name:'Bargeld'}];}
-function debitMonth(dateStr,card){const d=new Date(dateStr+'T00:00');let y=d.getFullYear(),m=d.getMonth();if(d.getDate()>=card.cut)m+=1;m+=card.offset||0;return isoDate(new Date(y,m,1)).slice(0,7);}
-function cardOpen(card){const cur=isoDate(new Date()).slice(0,7);const by={};let total=0;for(const e of S.entries){if(e.pay!==card.id)continue;const dm=debitMonth(e.date,card);if(dm<cur)continue;by[dm]=(by[dm]||0)+e.amount;total+=e.amount;}return {total,by};}
-function cashBalance(){let c=+S.settings.cashStart||0;for(const e of S.entries){if(e.kind==='withdraw')c+=e.amount;else if(e.pay==='bar')c-=e.amount;}return c;}
+const PAY_LABEL=id=>id==='bar'?'Bargeld':(S.cards.find(c=>c.id===id)||{}).name||id;
+function payOptions(){return [...S.cards,{id:'bar',name:'Bargeld'}];}
+function monthData(mk){return S.months[mk]||{};}
+function extrasOf(mk){return (monthData(mk).extras||[]).reduce((s,x)=>s+x.amount,0);}
+function incomeOf(mk){return (+S.plan.income||0)+extrasOf(mk);}
+function savingsOf(mk){const m=monthData(mk);return m.savings!=null?m.savings:(+S.plan.savings||0);}
+function reserveOf(mk){const m=monthData(mk);return m.reserve!=null?m.reserve:(+S.plan.reserve||0);}
+function setMonth(mk,key,val){S.months[mk]=S.months[mk]||{};if(val==null)delete S.months[mk][key];else S.months[mk][key]=val;if(!Object.keys(S.months[mk]).length)delete S.months[mk];}
+function debitMonth(dateStr,card){if(card.type!=='kredit')return dateStr.slice(0,7);const d=new Date(dateStr+'T00:00');let y=d.getFullYear(),m=d.getMonth();if(d.getDate()>=card.cut)m+=1;m+=card.offset||0;return isoDate(new Date(y,m,1)).slice(0,7);}
+function fixedOccurrences(f,from,to){const out=[];const iv=f.interval||1;let d=f.due?new Date(f.due+'T00:00'):new Date(new Date().getFullYear(),new Date().getMonth(),1);let g=0;while(d>from&&g++<600)d=addMonths(d,-iv);g=0;while(d<=to&&g++<600){if(d>=from)out.push(isoDate(d));d=addMonths(d,iv);}return out;}
+function cardOpen(card){const cur=isoDate(new Date()).slice(0,7);const by={};let total=0,fixedPart=0;
+  for(const e of S.entries){if(e.pay!==card.id)continue;const dm=debitMonth(e.date,card);if(dm<cur)continue;by[dm]=(by[dm]||0)+e.amount;total+=e.amount;}
+  const now=new Date();const horizon=new Date(now.getFullYear(),now.getMonth()+2,0);
+  for(const f of S.plan.fixed){if(f.pay!==card.id)continue;for(const ds of fixedOccurrences(f,addMonths(now,-13),horizon)){const dm=debitMonth(ds,card);if(dm<cur)continue;by[dm]=(by[dm]||0)+f.amount;total+=f.amount;fixedPart+=f.amount;}}
+  return {total,by,fixedPart};}
+function cashBalance(){let c=+S.settings.cashStart||0;for(const e of S.entries){if(e.kind==='withdraw')c+=e.amount;else if(e.pay==='bar')c-=e.amount;}const now=new Date();for(const f of S.plan.fixed){if(f.pay!=='bar')continue;const st=S.plan.start?new Date(S.plan.start+'-01T00:00'):addMonths(now,-12);c-=fixedOccurrences(f,st,now).length*f.amount;}return c;}
 function addMonths(d,n){const x=new Date(d);x.setMonth(x.getMonth()+n);return x;}
 function nextDue(f){if(!f.due)return null;let d=new Date(f.due+'T00:00');const today=new Date();today.setHours(0,0,0,0);let g=0;while(d<today&&g++<400)d=addMonths(d,f.interval||1);return d;}
 function accrued(f){if(!f.due||(f.interval||1)===1)return null;const nd=nextDue(f);const last=addMonths(nd,-(f.interval));const now=new Date();const months=Math.max(0,Math.min(f.interval,(now.getFullYear()-last.getFullYear())*12+now.getMonth()-last.getMonth()));return {saved:f.amount/f.interval*months,of:f.amount,next:nd};}
@@ -668,13 +724,13 @@ function monthsBetween(a,b){const [ay,am]=a.split('-').map(Number),[by,bm]=b.spl
 function planStart(){return S.plan.start||isoDate(new Date()).slice(0,7);}
 function pots(){
   const cur=isoDate(new Date()).slice(0,7),st=planStart();let sav=+S.plan.savingsStart||0,res=+S.plan.reserveStart||0;const closed=[];
-  if(S.plan.income>0){const n=monthsBetween(st,cur);for(let i=0;i<n;i++){const [y,m]=st.split('-').map(Number);const mk=isoDate(new Date(y,m-1+i,1)).slice(0,7);const surplus=planAvailable()-monthTotal(mk);sav+=S.plan.savings;res+=S.plan.reserve+surplus;closed.push({mk,surplus});}}
+  if(S.plan.income>0){const n=monthsBetween(st,cur);for(let i=0;i<n;i++){const [y,m]=st.split('-').map(Number);const mk=isoDate(new Date(y,m-1+i,1)).slice(0,7);const surplus=planAvailable(mk)-monthTotal(mk);sav+=savingsOf(mk);res+=reserveOf(mk)+surplus;closed.push({mk,surplus});}}
   const resSpent=S.entries.filter(e=>e.fromReserve).reduce((s,e)=>s+e.amount,0);res-=resSpent;
   for(const a of S.adjust){if(a.pot==='savings')sav+=a.amount;else res+=a.amount;}
   return {savings:sav,reserve:res,closed,resSpent};
 }
 function fixedMonthly(){return S.plan.fixed.reduce((s,f)=>s+f.amount/(f.interval||1),0);}
-function planAvailable(){const p=S.plan;if(p.income>0)return Math.max(0,p.income-p.savings-p.reserve-fixedMonthly());return S.budgets.total||0;}
+function planAvailable(mk){mk=mk||isoDate(new Date()).slice(0,7);const p=S.plan;if(p.income>0)return Math.max(0,incomeOf(mk)-savingsOf(mk)-reserveOf(mk)-fixedMonthly());return S.budgets.total||0;}
 function catBudgetSum(){return S.categories.reduce((s,c)=>s+(+S.budgets.byCat[c]||0),0);}
 function monthProgress(mk){const [y,m]=mk.split('-').map(Number);const days=new Date(y,m,0).getDate();const now=new Date();const cur=isoDate(now).slice(0,7);if(mk<cur)return 1;if(mk>cur)return 0;return now.getDate()/days;}
 function barClass(spent,budget){if(!budget)return '';const p=spent/budget;return p>=1?'over':p>=.8?'warn':'';}
@@ -683,7 +739,7 @@ $('mPrev').onclick=()=>shiftMonth(-1);$('mNext').onclick=()=>shiftMonth(1);
 
 function renderBook(){
   $('mLabel').textContent=monthLabel(month);
-  const tot=monthTotal(month),b=planAvailable(),rest=b-tot;
+  const tot=monthTotal(month),b=planAvailable(month),rest=b-tot;
   const pct=b?Math.min(100,tot/b*100):0,mp=monthProgress(month);
   const pace=b?(tot/b>mp+0.1?`Du liegst über dem Tempo: ${Math.round(tot/b*100)} % verbraucht bei ${Math.round(mp*100)} % des Monats.`:`${Math.round(tot/b*100)} % verbraucht bei ${Math.round(mp*100)} % des Monats.`):'';
   $('bookSummary').innerHTML=b?`<div class="row between"><span class="muted">Rest verfügbar</span><span class="pill ${barClass(tot,b)}">${rest<0?'Über Budget':'im Rahmen'}</span></div>
@@ -695,16 +751,16 @@ function renderBook(){
   const rs=reserveTotal(month);
   const dueNow=S.plan.fixed.filter(f=>{const d=nextDue(f);return d&&isoDate(d).slice(0,7)===month;});
   if(S.plan.income>0){
-    const P=pots();const cur=isoDate(new Date()).slice(0,7);const curSurplus=planAvailable()-monthTotal(cur);
+    const P=pots();const cur=isoDate(new Date()).slice(0,7);const curSurplus=planAvailable(cur)-monthTotal(cur);
     $('potsCard').style.display='';
     $('potsCard').innerHTML=`<div class="row between"><h3>Töpfe (Soll-Stand)</h3><button class="btn ghost" onclick="adjustPot()">Abgleich</button></div>
-      <div class="cat-row"><div class="n">Spartopf 🔒<div class="muted small">+ ${money(S.plan.savings)} je Monat · unantastbar</div></div><div class="v"><b>${money(P.savings)}</b></div></div>
-      <div class="cat-row"><div class="n">Rücklagen<div class="muted small">+ ${money(S.plan.reserve)} je Monat + Übertrag${rs?`, davon diesen Monat ${money(rs)} entnommen`:''}</div></div><div class="v"><b style="${P.reserve<0?'color:var(--danger)':''}">${money(P.reserve)}</b></div></div>
+      <div class="cat-row"><div class="n">Spartopf 🔒<div class="muted small">+ ${money(savingsOf(cur))} diesen Monat · unantastbar</div></div><div class="v"><b>${money(P.savings)}</b></div></div>
+      <div class="cat-row"><div class="n">Rücklagen<div class="muted small">+ ${money(reserveOf(cur))} diesen Monat + Übertrag${rs?`, davon diesen Monat ${money(rs)} entnommen`:''}</div></div><div class="v"><b style="${P.reserve<0?'color:var(--danger)':''}">${money(P.reserve)}</b></div></div>
       <div class="muted small" style="margin-top:6px">Voraussichtlicher Übertrag aus diesem Monat: <b style="${curSurplus<0?'color:var(--danger)':''}">${money(curSurplus)}</b></div>
       ${dueNow.length?`<div style="margin-top:10px"><b class="small">Diesen Monat fällig</b>${dueNow.map(f=>`<div class="cat-row"><div class="n">${esc(f.name)}<div class="muted small">${fmtDate(nextDue(f))}</div></div><div class="v">${money(f.amount)}</div></div>`).join('')}</div>`:''}`;
   }else{$('potsCard').style.display='none';}
   let openSum=0;
-  const cardRows=S.cards.map(c=>{const o=cardOpen(c);openSum+=o.total;const parts=Object.keys(o.by).sort().map(mk=>`${monthLabel(mk).split(' ')[0]}: ${money(o.by[mk])}`).join(' · ');return `<div class="cat-row"><div class="n">${esc(c.name)} offen<div class="muted small">${parts||'nichts offen'}</div></div><div class="v"><b>${money(o.total)}</b></div></div>`;}).join('');
+  const cardRows=S.cards.filter(c=>c.type==='kredit').map(c=>{const o=cardOpen(c);openSum+=o.total;const parts=Object.keys(o.by).sort().map(mk=>`${monthLabel(mk).split(' ')[0]}: ${money(o.by[mk])}`).join(' · ');return `<div class="cat-row"><div class="n">${esc(c.name)} offen<div class="muted small">${parts||'nichts offen'}${o.fixedPart?` · inkl. Fixkosten ${money(o.fixedPart)}`:''}</div></div><div class="v"><b>${money(o.total)}</b></div></div>`;}).join('');
   $('cardsCard').innerHTML=`<h3>Karten & Bargeld</h3>${cardRows}
     <div class="cat-row"><div class="n">Bargeld in der Tasche</div><div class="v"><b style="${cashBalance()<0?'color:var(--danger)':''}">${money(cashBalance())}</b></div></div>
     ${openSum?`<div class="muted small" style="margin-top:6px">Noch nicht vom Konto abgebucht: ${money(openSum)}. Dein Konto steht um diesen Betrag höher, als es dir wirklich zur Verfügung steht.</div>`:''}
@@ -716,7 +772,7 @@ function renderBook(){
   $('bookCats').innerHTML=`<h3 style="margin-bottom:6px">Nach Kategorie</h3>`+(rows||'<div class="empty">Noch keine Einträge in diesem Monat.</div>');
   const sel=$('filterCat');const cur=sel.value;sel.innerHTML='<option value="">Alle</option><option value="__withdraw">Abhebungen</option>'+S.categories.map(c=>`<option>${esc(c)}</option>`).join('');sel.value=cur;
   const list=entriesOf(month).filter(e=>!sel.value||(sel.value==='__withdraw'?e.kind==='withdraw':(e.category===sel.value&&e.kind!=='withdraw'))).sort((a,b)=>b.date.localeCompare(a.date)||b.created-a.created);
-  $('entries').innerHTML=list.length?list.map(e=>`<div class="entry" onclick="openEntry('${e.id}')"><div class="th">${e.photo?`<img src="${e.photo}" alt="">`:e.kind==='withdraw'?'🏧':catIcon(e.category)}</div><div class="t"><b>${esc(e.merchant)}</b><span class="muted small">${fmtDate(e.date)} · ${e.kind==='withdraw'?'Abhebung':esc(e.category)}${e.pay&&e.pay!=='konto'?' · '+esc(PAY_LABEL(e.pay)):''}${e.fromReserve?' · <span class="pill">Rücklagen</span>':''}${e.note?' · '+esc(e.note):''}</span></div><div class="a" style="${e.kind==='withdraw'?'color:var(--muted);font-weight:500':''}">${e.kind==='withdraw'?'↔ ':''}${money(e.amount)}</div></div>`).join(''):'<div class="empty">Keine Einkäufe. Sag „12 Euro bei Rewe" oder tippe auf „Manuell".</div>';
+  $('entries').innerHTML=list.length?list.map(e=>`<div class="entry" onclick="openEntry('${e.id}')"><div class="th">${e.photo?`<img src="${e.photo}" alt="">`:e.kind==='withdraw'?'🏧':catIcon(e.category)}</div><div class="t"><b>${esc(e.merchant)}</b><span class="muted small">${fmtDate(e.date)} · ${e.kind==='withdraw'?'Abhebung':esc(e.category)}${e.pay&&e.pay!==S.settings.defaultPay?' · '+esc(PAY_LABEL(e.pay)):''}${e.fromReserve?' · <span class="pill">Rücklagen</span>':''}${e.note?' · '+esc(e.note):''}</span></div><div class="a" style="${e.kind==='withdraw'?'color:var(--muted);font-weight:500':''}">${e.kind==='withdraw'?'↔ ':''}${money(e.amount)}</div></div>`).join(''):'<div class="empty">Keine Einkäufe. Sag „12 Euro bei Rewe" oder tippe auf „Manuell".</div>';
 }
 function catIcon(c){return {'Lebensmittel':'🛒','Restaurant & Café':'🍽️','Transport':'🚗','Wohnen':'🏠','Freizeit':'🎟️','Kleidung':'👕','Gesundheit':'💊'}[c]||'💳';}
 $('filterCat').onchange=renderBook;
@@ -728,7 +784,7 @@ function openEntry(id){
   $('eCat').innerHTML=S.categories.map(c=>`<option>${esc(c)}</option>`).join('');
   $('eAmount').value=e?e.amount:'';$('eMerchant').value=e?e.merchant:'';$('eCat').value=e?e.category:'Lebensmittel';
   $('eDate').value=e?e.date:isoDate(new Date());$('eNote').value=e?e.note:'';$('eReserve').checked=!!(e&&e.fromReserve);
-  $('ePay').innerHTML=payOptions().map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('');$('ePay').value=e?(e.pay||'konto'):S.settings.defaultPay;
+  $('ePay').innerHTML=payOptions().map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('');$('ePay').value=e?(e.pay||S.settings.defaultPay):S.settings.defaultPay;
   $('eKind').value=e?(e.kind||'expense'):'expense';$('eKind').onchange=()=>{const w=$('eKind').value==='withdraw';$('eCat').closest('.field').style.display=w?'none':'';$('eReserve').parentElement.style.display=w?'none':'';if(w&&!editId){$('ePay').value=S.settings.withdrawCard;if(!$('eMerchant').value)$('eMerchant').value='Bargeldabhebung';}};$('eKind').onchange();
   pendingPhoto=e?e.photo:null;$('ePreview').hidden=!pendingPhoto;if(pendingPhoto)$('ePreview').src=pendingPhoto;
   $('eAI').hidden=true;$('eDelete').hidden=!e;
@@ -770,16 +826,22 @@ function shrink(file){
 function renderBudget(){
   const p=S.plan;$('pIncome').value=p.income||'';$('pSavings').value=p.savings||'';$('pReserve').value=p.reserve||'';$('pSavStart').value=p.savingsStart||'';$('pResStart').value=p.reserveStart||'';$('pStart').value=planStart();
   const IL={1:'monatlich',3:'vierteljährlich',6:'halbjährlich',12:'jährlich'};
-  $('fixedList').innerHTML=p.fixed.length?p.fixed.map(f=>{const nd=nextDue(f),ac=accrued(f);return `<div class="cat-row"><div class="n">${esc(f.name)}<div class="muted small">${money(f.amount)} ${IL[f.interval]||''}${nd?' · fällig '+nd.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'}):''}${ac?` · angespart ${money(ac.saved)} von ${money(ac.of)}`:''}</div>${ac?`<div class="bar" style="margin-top:4px"><i style="width:${Math.min(100,ac.saved/ac.of*100)}%"></i></div>`:''}</div><div class="v"><b>${money(f.amount/(f.interval||1))}</b><div class="muted small">/ Monat</div></div><button class="btn ghost" onclick="delFixed('${f.id}')" aria-label="Entfernen">✕</button></div>`;}).join('')+`<div class="cat-row"><div class="n"><b>Summe Fixkosten</b></div><div class="v"><b>${money(fixedMonthly())}</b><div class="muted small">/ Monat</div></div><span style="width:34px"></span></div>`:'<div class="empty small">Noch keine Fixkosten.</div>';
-  const avail=planAvailable(),cs=catBudgetSum();
+  $('fxPay').innerHTML=payOptions().map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('');if(!$('fxPay').dataset.set){$('fxPay').value=S.settings.defaultPay;$('fxPay').dataset.set='1';}
+  $('fixedList').innerHTML=p.fixed.length?p.fixed.map(f=>{const nd=nextDue(f),ac=accrued(f);return `<div class="cat-row"><div class="n">${esc(f.name)}<div class="muted small">${money(f.amount)} ${IL[f.interval]||''}${nd?' · fällig '+nd.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'}):''}${f.pay&&f.pay!==S.settings.defaultPay?' · '+esc(PAY_LABEL(f.pay)):''}${ac?` · angespart ${money(ac.saved)} von ${money(ac.of)}`:''}</div>${ac?`<div class="bar" style="margin-top:4px"><i style="width:${Math.min(100,ac.saved/ac.of*100)}%"></i></div>`:''}</div><div class="v"><b>${money(f.amount/(f.interval||1))}</b><div class="muted small">/ Monat</div></div><select style="width:auto;padding:4px 6px;font-size:12px" onchange="setFixedPay('${f.id}',this.value)">${payOptions().map(o=>`<option value="${o.id}" ${(f.pay||S.settings.defaultPay)===o.id?'selected':''}>${esc(o.name)}</option>`).join('')}</select><button class="btn ghost" onclick="delFixed('${f.id}')" aria-label="Entfernen">✕</button></div>`;}).join('')+`<div class="cat-row"><div class="n"><b>Summe Fixkosten</b></div><div class="v"><b>${money(fixedMonthly())}</b><div class="muted small">/ Monat</div></div><span style="width:34px"></span></div>`:'<div class="empty small">Noch keine Fixkosten.</div>';
+  $('mLabel2').textContent=monthLabel(month);const md=monthData(month);
+  $('mSavings').value=md.savings!=null?md.savings:'';$('mReserve').value=md.reserve!=null?md.reserve:'';
+  const ex=md.extras||[];
+  $('extrasList').innerHTML=ex.length?ex.map(x=>`<div class="cat-row"><div class="n">${esc(x.label)}</div><div class="v"><b>${money(x.amount)}</b></div><button class="btn ghost" onclick="delExtra('${x.id}')" aria-label="Entfernen">✕</button></div>`).join(''):'<div class="muted small">Keine Extras in diesem Monat.</div>';
+  $('monthCalc').textContent=p.income>0?`${monthLabel(month)}: Einnahmen ${money(incomeOf(month))} − Sparen ${money(savingsOf(month))} − Rücklagen ${money(reserveOf(month))} − Fixkosten ${money(fixedMonthly())} = frei verfügbar ${money(planAvailable(month))}`:'';
+  const avail=planAvailable(month),cs=catBudgetSum();
   let warn='';
   if(p.income>0&&avail<=0)warn='<p class="small" style="color:var(--danger)">Sparen, Rücklagen und Fixkosten übersteigen dein Einkommen. So ist der Plan nicht haltbar.</p>';
   else if(avail>0&&cs>avail)warn=`<p class="small" style="color:var(--danger)">Deine Kategoriebudgets (${money(cs)}) sind höher als der verfügbare Betrag (${money(avail)}). Bitte um ${money(cs-avail)} kürzen.</p>`;
   else if(avail>0&&cs>0)warn=`<p class="small muted">Kategoriebudgets: ${money(cs)} von ${money(avail)} verteilt, ${money(avail-cs)} ohne feste Zuordnung.</p>`;
-  $('planResult').innerHTML=p.income>0?`<h3>Frei verfügbar pro Monat</h3>
-   <div class="cat-row"><div class="n">Einnahmen</div><div class="v">${money(p.income)}</div></div>
-   <div class="cat-row"><div class="n">− Sparrate</div><div class="v">${money(p.savings)}</div></div>
-   <div class="cat-row"><div class="n">− Rücklagen</div><div class="v">${money(p.reserve)}</div></div>
+  $('planResult').innerHTML=p.income>0?`<h3>Frei verfügbar – ${monthLabel(month)}</h3>
+   <div class="cat-row"><div class="n">Einnahmen${extrasOf(month)?`<div class="muted small">Grundgehalt ${money(p.income)} + Extras ${money(extrasOf(month))}</div>`:''}</div><div class="v">${money(incomeOf(month))}</div></div>
+   <div class="cat-row"><div class="n">− Sparrate${md.savings!=null?' <span class="pill">angepasst</span>':''}</div><div class="v">${money(savingsOf(month))}</div></div>
+   <div class="cat-row"><div class="n">− Rücklagen${md.reserve!=null?' <span class="pill">angepasst</span>':''}</div><div class="v">${money(reserveOf(month))}</div></div>
    <div class="cat-row"><div class="n">− Fixkosten</div><div class="v">${money(fixedMonthly())}</div></div>
    <div class="cat-row"><div class="n"><b>= Frei verfügbar</b></div><div class="v"><b class="big" style="font-size:24px">${money(avail)}</b></div></div>${warn}`
   :'<h3>Frei verfügbar pro Monat</h3><p class="muted small">Trag oben dein Gehalt ein, dann rechne ich Sparrate, Rücklagen und Fixkosten ab.</p>';
@@ -789,13 +851,19 @@ function renderBudget(){
 }
 ['pIncome','pSavings','pReserve','pSavStart','pResStart'].forEach(id=>$(id).onchange=()=>{S.plan[{pIncome:'income',pSavings:'savings',pReserve:'reserve',pSavStart:'savingsStart',pResStart:'reserveStart'}[id]]=+$(id).value||0;if(!S.plan.start)S.plan.start=isoDate(new Date()).slice(0,7);save();renderBudget();renderBook();});
 $('pStart').onchange=()=>{S.plan.start=$('pStart').value||null;save();renderBudget();renderBook();};
+$('mPrev2').onclick=()=>shiftMonth(-1);$('mNext2').onclick=()=>shiftMonth(1);
+$('mSavings').onchange=()=>{const v=$('mSavings').value;setMonth(month,'savings',v===''?null:(+v||0));save();render();};
+$('mReserve').onchange=()=>{const v=$('mReserve').value;setMonth(month,'reserve',v===''?null:(+v||0));save();render();};
+$('addExtra').onclick=()=>{const l=$('exLabel').value.trim(),a=parseFloat(String($('exAmount').value).replace(',','.'));if(!l||isNaN(a)){toast('Bezeichnung und Betrag angeben');return;}const m=S.months[month]||(S.months[month]={});m.extras=m.extras||[];m.extras.push({id:uid(),label:l,amount:a});$('exLabel').value='';$('exAmount').value='';save();render();};
+function delExtra(id){for(const mk in S.months){const m=S.months[mk];if(m.extras){m.extras=m.extras.filter(x=>x.id!==id);if(!m.extras.length)delete m.extras;}if(!Object.keys(m).length)delete S.months[mk];}save();render();}
 function adjustPot(){
   const P=pots();const pot='reserve';const cur=P.reserve;
   const v=prompt(`Tatsächlicher Kontostand der Rücklagen (aktuell rechnerisch ${money(cur)}):`);if(v==null)return;
   const target=parseFloat(String(v).replace(',','.'));if(isNaN(target))return;
   S.adjust.push({id:uid(),pot,amount:target-cur,date:isoDate(new Date()),note:'Abgleich'});save();render();toast('Abgeglichen');
 }
-$('addFixed').onclick=()=>{const n=$('fxName').value.trim(),a=parseFloat(String($('fxAmount').value).replace(',','.'));if(!n||!(a>0)){toast('Name und Betrag angeben');return;}S.plan.fixed.push({id:uid(),name:n,amount:a,interval:+$('fxInt').value||1,due:$('fxDue').value||null});$('fxName').value='';$('fxAmount').value='';$('fxDue').value='';save();render();};
+$('addFixed').onclick=()=>{const n=$('fxName').value.trim(),a=parseFloat(String($('fxAmount').value).replace(',','.'));if(!n||!(a>0)){toast('Name und Betrag angeben');return;}S.plan.fixed.push({id:uid(),name:n,amount:a,interval:+$('fxInt').value||1,due:$('fxDue').value||null,pay:$('fxPay').value||S.settings.defaultPay});$('fxName').value='';$('fxAmount').value='';$('fxDue').value='';save();render();};
+function setFixedPay(id,pay){const f=S.plan.fixed.find(x=>x.id===id);if(f){f.pay=pay;save();render();}}
 function delFixed(id){S.plan.fixed=S.plan.fixed.filter(f=>f.id!==id);save();render();}
 $('addCat').onclick=()=>{const n=$('newCat').value.trim();if(!n)return;if(S.categories.includes(n)){toast('Gibt es schon');return;}S.categories.push(n);$('newCat').value='';save();render();};
 
@@ -855,7 +923,7 @@ $('notifBtn').onclick=async()=>{
 
 /* ===================== Mehr ===================== */
 function renderMore(){
-  $('cardSettings').innerHTML=S.cards.map((c,i)=>`<div style="padding:8px 0;border-top:1px solid var(--line)"><div class="field"><label class="f">Name der ${i+1}. Karte (so sagst du sie auch per Sprache)</label><input type="text" value="${esc(c.name)}" data-cid="${c.id}" data-f="name" placeholder="z. B. Amex, DKB Visa"></div><div class="grid2" style="margin-top:8px"><div class="field"><label class="f">Stichtag (Tag im Monat)</label><input type="number" min="1" max="28" value="${c.cut}" data-cid="${c.id}" data-f="cut"></div><div class="field"><label class="f">Abbuchung</label><select data-cid="${c.id}" data-f="offset"><option value="0" ${c.offset==0?'selected':''}>im selben Monat</option><option value="1" ${c.offset==1?'selected':''}>im Folgemonat</option></select></div></div></div>`).join('');
+  $('cardSettings').innerHTML=S.cards.map((c,i)=>`<div style="padding:8px 0;border-top:1px solid var(--line)"><div class="row"><div class="field" style="flex:1"><label class="f">${c.type==='kredit'?'Kreditkarte':'Konto'} – Name (so sagst du es auch per Sprache)</label><input type="text" value="${esc(c.name)}" data-cid="${c.id}" data-f="name" placeholder="z. B. Amex, DKB Giro"></div><button class="btn ghost" onclick="delCard('${c.id}')" aria-label="Entfernen" style="margin-top:14px">✕</button></div>${c.type==='kredit'?`<div class="grid2" style="margin-top:8px"><div class="field"><label class="f">Stichtag (Tag im Monat)</label><input type="number" min="1" max="28" value="${c.cut}" data-cid="${c.id}" data-f="cut"></div><div class="field"><label class="f">Abbuchung</label><select data-cid="${c.id}" data-f="offset"><option value="0" ${c.offset==0?'selected':''}>im selben Monat</option><option value="1" ${c.offset==1?'selected':''}>im Folgemonat</option></select></div></div>`:''}</div>`).join('');
   $('cardSettings').querySelectorAll('[data-cid]').forEach(i=>i.onchange=()=>{const c=S.cards.find(x=>x.id===i.dataset.cid);c[i.dataset.f]=i.dataset.f==='name'?i.value.trim()||c.name:+i.value;save();render();});
   $('setDefaultPay').innerHTML=payOptions().map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('');$('setDefaultPay').value=S.settings.defaultPay;
   $('setWithdrawCard').innerHTML=payOptions().filter(o=>o.id!=='bar').map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('');$('setWithdrawCard').value=S.settings.withdrawCard;
@@ -867,6 +935,8 @@ $('addContact').onclick=()=>{const n=$('cName').value.trim(),p=$('cPhone').value
 function delContact(id){S.contacts=S.contacts.filter(c=>c.id!==id);save();render();}
 $('setSpeak').onchange=()=>{S.settings.speak=$('setSpeak').checked;save();};
 $('setDefaultPay').onchange=()=>{S.settings.defaultPay=$('setDefaultPay').value;save();};
+$('addCard').onclick=()=>{const n=$('ncName').value.trim();if(!n){toast('Name angeben');return;}const t=$('ncType').value;S.cards.push(t==='kredit'?{id:uid(),name:n,type:'kredit',cut:1,offset:1}:{id:uid(),name:n,type:'konto'});$('ncName').value='';save();render();};
+function delCard(id){if(S.cards.length<=1){toast('Mindestens ein Zahlungsmittel muss bleiben');return;}if(S.entries.some(e=>e.pay===id)){toast('Hat noch Buchungen – zuerst Zahlungsart der Buchungen ändern');return;}if(!confirm('Zahlungsmittel entfernen?'))return;S.cards=S.cards.filter(c=>c.id!==id);if(S.settings.defaultPay===id)S.settings.defaultPay=S.cards[0].id;if(S.settings.withdrawCard===id)S.settings.withdrawCard=S.cards[0].id;save();render();}
 $('setWithdrawCard').onchange=()=>{S.settings.withdrawCard=$('setWithdrawCard').value;save();};
 $('setCashStart').onchange=()=>{S.settings.cashStart=+$('setCashStart').value||0;save();renderBook();};
 $('exportBtn').onclick=async()=>{
@@ -877,8 +947,37 @@ $('exportBtn').onclick=async()=>{
 $('importBtn').onclick=()=>{try{const s=JSON.parse($('importBox').value);if(!s||typeof s!=='object')throw 0;S=fill(s);save();$('importBox').value='';render();toast('Backup wiederhergestellt');}catch(e){toast('Kein gültiges Backup');}};
 $('resetBtn').onclick=()=>{if(confirm('Wirklich alle Daten löschen?')){localStorage.removeItem(KEY);S=fill({});render();toast('Zurückgesetzt');}};
 
+/* ===================== Verlauf (SVG) ===================== */
+function lastMonths(n){const out=[];const now=new Date();for(let i=n-1;i>=0;i--)out.push(isoDate(new Date(now.getFullYear(),now.getMonth()-i,1)).slice(0,7));return out;}
+function barChart(id,months,series,opts={}){
+  const W=680,H=260,L=52,R=12,T=16,B=40;const iw=W-L-R,ih=H-T-B;
+  const allVals=series.flatMap(s=>s.values).concat(opts.line||[]);let max=Math.max(1,...allVals.map(v=>Math.abs(v)));max=Math.ceil(max/100)*100||100;
+  const y=v=>T+ih-(Math.max(0,v)/max)*ih;
+  const gw=iw/months.length,bw=gw/(series.length+0.6);
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" style="font-family:inherit;font-size:11px;overflow:visible">`;
+  for(let i=0;i<=4;i++){const v=max/4*i;s+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end" fill="var(--muted)">${Math.round(v)}</text>`;}
+  months.forEach((mk,i)=>{series.forEach((se,k)=>{const v=se.values[i];const x=L+i*gw+0.3*bw+k*bw;const hh=T+ih-y(v);s+=`<rect x="${x}" y="${y(v)}" width="${bw-2}" height="${hh}" rx="3" fill="${se.color}"><title>${mk}: ${money(v)}</title></rect>`;});
+    const lab=monthLabel(mk).slice(0,3);s+=`<text x="${L+i*gw+gw/2}" y="${H-B+16}" text-anchor="middle" fill="var(--muted)">${lab}</text>`;});
+  if(opts.line){const pts=opts.line.map((v,i)=>`${L+i*gw+gw/2},${y(v)}`).join(' ');s+=`<polyline points="${pts}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-dasharray="5 4"/>`;}
+  if(opts.legend){s+=opts.legend.map((l,i)=>l.dash?`<line x1="${L+i*160}" x2="${L+i*160+14}" y1="${H-5}" y2="${H-5}" stroke="var(--ink)" stroke-width="2" stroke-dasharray="4 3"/><text x="${L+i*160+18}" y="${H-1}" fill="var(--muted)">${l.label}</text>`:`<rect x="${L+i*160}" y="${H-10}" width="10" height="10" rx="2" fill="${l.color}"/><text x="${L+i*160+14}" y="${H-1}" fill="var(--muted)">${l.label}</text>`).join('');}
+  s+='</svg>';$(id).innerHTML=s;
+}
+function renderChart(){
+  const months=lastMonths(12);
+  const sel=$('chartCat');const cur=sel.value;sel.innerHTML='<option value="">Gesamt</option>'+S.categories.map(c=>`<option>${esc(c)}</option>`).join('');sel.value=cur;const cat=sel.value;
+  const spend=months.map(mk=>cat?catStatus(cat,mk).spent:monthTotal(mk));
+  const ref=months.map(mk=>cat?(+S.budgets.byCat[cat]||0):(S.plan.income>0?planAvailable(mk):(S.budgets.total||0)));
+  const hasRef=ref.some(v=>v>0);
+  barChart('chartSpend',months,[{values:spend,color:'var(--accent)'}],{line:hasRef?ref:null,legend:[{label:cat?'Ausgaben '+cat:'Ausgaben',color:'var(--accent)'}].concat(hasRef?[{label:cat?'Budget':'Frei verfügbar',dash:true}]:[])});
+  const n=spend.filter(v=>v>0).length;const avg=n?spend.reduce((a,b)=>a+b,0)/n:0;
+  $('chartSpendNote').textContent=n?`Durchschnitt der Monate mit Buchungen: ${money(avg)}.`:'Noch keine Buchungen.';
+  const inc=months.map(mk=>incomeOf(mk));const base=months.map(()=>+S.plan.income||0);
+  barChart('chartIncome',months,[{values:inc,color:'var(--ok)'}],{line:S.plan.income>0?base:null,legend:[{label:'Einnahmen',color:'var(--ok)'}].concat(S.plan.income>0?[{label:'Grundgehalt',dash:true}]:[])});
+}
+$('chartCat').onchange=renderChart;
+
 /* ===================== Render ===================== */
-function render(){renderBook();renderBudget();renderNotes();renderMore();}
+function render(){renderBook();renderBudget();renderNotes();renderMore();renderChart();}
 render();scheduleReminders();
 if('speechSynthesis' in window)speechSynthesis.getVoices();
 </script>

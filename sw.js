@@ -1,5 +1,5 @@
 /* Service Worker: macht die App offline nutzbar und speichert die OCR-Dateien nach dem ersten Laden. */
-const VERSION = 'assistent-v8';
+const VERSION = 'assistent-v10';
 const APP_FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-180.png'];
 const RUNTIME_HOSTS = ['cdn.jsdelivr.net', 'tessdata.projectnaptha.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 

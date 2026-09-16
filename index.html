@@ -749,6 +749,7 @@ function pots(){
   for(const a of S.adjust){if(a.pot==='savings')sav+=a.amount;else res+=a.amount;}
   return {savings:sav,reserve:res,closed,resSpent};
 }
+function fixedMonthlyEq(){return S.plan.fixed.reduce((s,f)=>s+f.amount/(f.interval||1),0);}
 function planAvailable(mk){mk=mk||isoDate(new Date()).slice(0,7);const p=S.plan;if(p.income>0)return Math.max(0,incomeOf(mk)-savingsOf(mk)-reserveOf(mk));return S.budgets.total||0;}
 function catBudgetSum(){return S.categories.reduce((s,c)=>s+(+S.budgets.byCat[c]||0),0);}
 function monthProgress(mk){const [y,m]=mk.split('-').map(Number);const days=new Date(y,m,0).getDate();const now=new Date();const cur=isoDate(now).slice(0,7);if(mk<cur)return 1;if(mk>cur)return 0;return now.getDate()/days;}
@@ -853,7 +854,7 @@ function renderBudget(){
   const IL={1:'monatlich',3:'vierteljährlich',6:'halbjährlich',12:'jährlich'};
   $('fxPay').innerHTML=payOptions().map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('');if(!$('fxPay').dataset.set){$('fxPay').value=S.settings.defaultPay;$('fxPay').dataset.set='1';}
   $('fxCat').innerHTML=S.categories.map(c=>`<option>${esc(c)}</option>`).join('');
-  $('fixedList').innerHTML=p.fixed.length?p.fixed.map(f=>{const nd=nextDue(f);return `<div class="cat-row"><div class="n">${esc(f.name)}<div class="muted small">${money(f.amount)} ${IL[f.interval]||''} · ${esc(f.category||'Sonstiges')}${nd?' · nächste Fälligkeit '+nd.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'}):' · kein Fälligkeitsdatum'}</div></div><select style="width:auto;padding:4px 6px;font-size:12px" onchange="setFixedPay('${f.id}',this.value)">${payOptions().map(o=>`<option value="${o.id}" ${(f.pay||S.settings.defaultPay)===o.id?'selected':''}>${esc(o.name)}</option>`).join('')}</select><button class="btn ghost" onclick="delFixed('${f.id}')" aria-label="Entfernen">✕</button></div>`;}).join(''):'<div class="empty small">Noch keine Fixkosten.</div>';
+  $('fixedList').innerHTML=p.fixed.length?p.fixed.map(f=>{const nd=nextDue(f);return `<div class="cat-row"><div class="n">${esc(f.name)}<div class="muted small">${money(f.amount)} ${IL[f.interval]||''} · ${esc(f.category||'Sonstiges')}${nd?' · nächste Fälligkeit '+nd.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'}):' · kein Fälligkeitsdatum'}</div></div><div class="v"><span class="muted small">≈ ${money(f.amount/(f.interval||1))}<br>/ Monat</span></div><select style="width:auto;padding:4px 6px;font-size:12px" onchange="setFixedPay('${f.id}',this.value)">${payOptions().map(o=>`<option value="${o.id}" ${(f.pay||S.settings.defaultPay)===o.id?'selected':''}>${esc(o.name)}</option>`).join('')}</select><button class="btn ghost" onclick="delFixed('${f.id}')" aria-label="Entfernen">✕</button></div>`;}).join('')+`<div class="cat-row"><div class="n"><b>Rechnerische Belastung gesamt</b><div class="muted small">nur zur Orientierung, wird nicht automatisch abgezogen</div></div><div class="v"><b>${money(fixedMonthlyEq())}</b><div class="muted small">/ Monat</div></div><span style="width:34px"></span></div>`:'<div class="empty small">Noch keine Fixkosten.</div>';
   $('mLabel2').textContent=monthLabel(month);const md=monthData(month);
   $('mSavings').value=md.savings!=null?md.savings:'';$('mReserve').value=md.reserve!=null?md.reserve:'';
   const ex=md.extras||[];

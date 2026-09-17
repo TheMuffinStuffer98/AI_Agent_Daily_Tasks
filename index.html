@@ -319,7 +319,8 @@ nav.tabs svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1
 <!-- Modal: Einkauf -->
 <div class="modal" id="mEntry"><div class="sheet">
   <h2 id="mEntryTitle">Einkauf</h2>
-  <img id="ePreview" class="preview" alt="" hidden>
+  <img id="ePreview" class="preview" alt="" hidden onclick="viewPhoto(pendingPhoto)" style="cursor:zoom-in">
+  <p class="muted small" id="ePreviewHint" hidden>Antippen zum Vergrößern</p>
   <p class="small muted" id="eAI" hidden></p>
   <div class="grid2">
     <div class="field"><label class="f">Art</label><select id="eKind"><option value="expense">Ausgabe</option><option value="withdraw">Bargeldabhebung</option><option value="fixed" hidden>Fixkosten (automatisch)</option></select></div>
@@ -351,6 +352,11 @@ nav.tabs svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1
     <button class="btn" data-close>Abbrechen</button>
     <button class="btn primary" id="iSave">Speichern</button>
   </div>
+</div></div>
+
+<div class="modal" id="mPhoto" style="align-items:center;background:rgba(0,0,0,.85)"><div style="position:relative;max-width:100%;max-height:100%" onclick="event.stopPropagation()">
+  <img id="photoFull" src="" alt="Kassenbon" style="max-width:92vw;max-height:86vh;border-radius:10px;display:block;margin:0 auto;background:#fff">
+  <button class="btn" style="position:absolute;top:-46px;right:0;background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.3)" onclick="$('mPhoto').classList.remove('open')">✕ Schließen</button>
 </div></div>
 
 <div class="toast" id="toast"></div>
@@ -397,6 +403,8 @@ const isoDate=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
 const isoLocal=d=>`${isoDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const fmtDate=s=>{const d=new Date(s);return isNaN(d)?'':d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'});};
 const fmtDT=s=>{const d=new Date(s);return isNaN(d)?'':d.toLocaleString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});};
+function viewPhoto(src){if(!src)return;$('photoFull').src=src;$('mPhoto').classList.add('open');}
+function viewPhotoOf(id){const e=S.entries.find(x=>x.id===id);if(e&&e.photo)viewPhoto(e.photo);}
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200);}
 
 /* ===================== Service Worker (offline) ===================== */
@@ -793,7 +801,7 @@ function renderBook(){
   $('bookCats').innerHTML=`<div class="row between" style="margin-bottom:2px"><h3>Nach Kategorie</h3><b>${money(catTot)}</b></div><div class="muted small" style="text-align:right;margin-bottom:8px">${catBudgetSum()?`/ ${money(catBudgetSum())}`:''}</div>`+(rows||'<div class="empty">Noch keine Einträge in diesem Monat.</div>');
   const sel=$('filterCat');const cur=sel.value;sel.innerHTML='<option value="">Alle</option><option value="__withdraw">Abhebungen</option>'+S.categories.map(c=>`<option>${esc(c)}</option>`).join('');sel.value=cur;
   const list=entriesOf(month).filter(e=>!sel.value||(sel.value==='__withdraw'?e.kind==='withdraw':(e.category===sel.value&&e.kind!=='withdraw'))).sort((a,b)=>b.date.localeCompare(a.date)||b.created-a.created);
-  $('entries').innerHTML=list.length?list.map(e=>`<div class="entry" onclick="openEntry('${e.id}')"><div class="th">${e.photo?`<img src="${e.photo}" alt="">`:e.kind==='withdraw'?'🏧':e.kind==='fixed'?'🔁':catIcon(e.category)}</div><div class="t"><b>${esc(e.merchant)}</b><span class="muted small">${fmtDate(e.date)} · ${e.kind==='withdraw'?'Abhebung':esc(e.category)}${e.kind==='fixed'?' · <span class="pill">Fix</span>':''}${e.pay&&e.pay!==S.settings.defaultPay?' · '+esc(PAY_LABEL(e.pay)):''}${e.fromReserve?' · <span class="pill">Rücklagen</span>':''}${e.note?' · '+esc(e.note):''}</span></div><div class="a" style="${e.kind==='withdraw'?'color:var(--muted);font-weight:500':''}">${e.kind==='withdraw'?'↔ ':''}${money(e.amount)}</div></div>`).join(''):'<div class="empty">Keine Einkäufe. Sag „12 Euro bei Rewe" oder tippe auf „Manuell".</div>';
+  $('entries').innerHTML=list.length?list.map(e=>`<div class="entry" onclick="openEntry('${e.id}')"><div class="th"${e.photo?` onclick="event.stopPropagation();viewPhotoOf('${e.id}')" style="cursor:zoom-in"`:''}>${e.photo?`<img src="${e.photo}" alt="Kassenbon">`:e.kind==='withdraw'?'🏧':e.kind==='fixed'?'🔁':catIcon(e.category)}</div><div class="t"><b>${esc(e.merchant)}</b><span class="muted small">${fmtDate(e.date)} · ${e.kind==='withdraw'?'Abhebung':esc(e.category)}${e.kind==='fixed'?' · <span class="pill">Fix</span>':''}${e.pay&&e.pay!==S.settings.defaultPay?' · '+esc(PAY_LABEL(e.pay)):''}${e.fromReserve?' · <span class="pill">Rücklagen</span>':''}${e.note?' · '+esc(e.note):''}</span></div><div class="a" style="${e.kind==='withdraw'?'color:var(--muted);font-weight:500':''}">${e.kind==='withdraw'?'↔ ':''}${money(e.amount)}</div></div>`).join(''):'<div class="empty">Keine Einkäufe. Sag „12 Euro bei Rewe" oder tippe auf „Manuell".</div>';
 }
 function catIcon(c){return {'Lebensmittel':'🛒','Restaurant & Café':'🍽️','Transport':'🚗','Wohnen':'🏠','Freizeit':'🎟️','Kleidung':'👕','Gesundheit':'💊'}[c]||'💳';}
 $('filterCat').onchange=renderBook;
@@ -807,7 +815,7 @@ function openEntry(id){
   $('eDate').value=e?e.date:isoDate(new Date());$('eNote').value=e?e.note:'';$('eReserve').checked=!!(e&&e.fromReserve);
   $('ePay').innerHTML=payOptions().map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('');$('ePay').value=e?(e.pay||S.settings.defaultPay):S.settings.defaultPay;
   $('eKind').value=e?(e.kind||'expense'):'expense';$('eKind').onchange=()=>{const w=$('eKind').value==='withdraw';$('eCat').closest('.field').style.display=w?'none':'';$('eReserve').parentElement.style.display=w?'none':'';if(w&&!editId){$('ePay').value=S.settings.withdrawCard;if(!$('eMerchant').value)$('eMerchant').value='Bargeldabhebung';}};$('eKind').onchange();
-  pendingPhoto=e?e.photo:null;$('ePreview').hidden=!pendingPhoto;if(pendingPhoto)$('ePreview').src=pendingPhoto;
+  pendingPhoto=e?e.photo:null;$('ePreview').hidden=!pendingPhoto;$('ePreviewHint').hidden=!pendingPhoto;if(pendingPhoto)$('ePreview').src=pendingPhoto;
   $('eAI').hidden=true;$('eDelete').hidden=!e;
   $('mEntry').classList.add('open');if(!e)setTimeout(()=>$('eAmount').focus(),50);
 }
@@ -830,7 +838,7 @@ $('addPhoto').onclick=()=>$('photoInput').click();
 $('photoInput').onchange=async e=>{
   const f=e.target.files[0];e.target.value='';if(!f)return;
   const {thumb,img}=await shrink(f);
-  openEntry(null);pendingPhoto=thumb;$('ePreview').src=thumb;$('ePreview').hidden=false;
+  openEntry(null);pendingPhoto=thumb;$('ePreview').src=thumb;$('ePreview').hidden=false;$('ePreviewHint').hidden=false;
   const st=$('eAI');st.hidden=false;st.textContent='Bereite Bonerkennung vor…';
   try{
     const w=await getOCR(t=>st.textContent=t);
@@ -843,8 +851,8 @@ $('photoInput').onchange=async e=>{
 };
 function shrink(file){
   return new Promise(res=>{const img=new Image();const url=URL.createObjectURL(file);img.onload=()=>{
-    const s=Math.min(1,360/Math.max(img.width,img.height));const c=document.createElement('canvas');c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-    res({thumb:c.toDataURL('image/jpeg',.6),img});
+    const s=Math.min(1,1000/Math.max(img.width,img.height));const c=document.createElement('canvas');c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    res({thumb:c.toDataURL('image/jpeg',.72),img});
   };img.src=url;});
 }
 
